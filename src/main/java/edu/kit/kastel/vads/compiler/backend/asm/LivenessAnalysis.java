@@ -29,7 +29,7 @@ public class LivenessAnalysis {
 
 				Set<Node> newOut = new HashSet<>();
 				for (Node succ : graph.successors(node)) {
-					newOut.addAll(liveIn.get(succ));
+					newOut.addAll(liveIn.getOrDefault(succ, Set.of()));
 				}
 
 				Set<Node> newIn = new HashSet<>(newOut);

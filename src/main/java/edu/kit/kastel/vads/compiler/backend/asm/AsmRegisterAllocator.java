@@ -31,9 +31,10 @@ public class AsmRegisterAllocator implements RegisterAllocator{
 	private InterferenceGraph interferenceGraph = new InterferenceGraph();
 	private LivenessAnalysis liveness = new LivenessAnalysis();
 
+	private Set<Node> initialWorklist = new HashSet<>();
 	private Stack<Node> selectStack = new Stack<>();
 	private Set<Node> simplifyWorklist = new HashSet<>();
-	private Set<Node> spilledNodes = new HashSet<>();
+	private Set<Node> spillWorklist = new HashSet<>();
 
 	private class InterferenceGraph {
 		private Map<Node, Set<Node>> adjList = new HashMap<>();
@@ -67,10 +68,13 @@ public class AsmRegisterAllocator implements RegisterAllocator{
 		scan(graph.endBlock(), visited);
 		
 		// Perform allocation using graph coloring
-		liveness.analyzeLiveness(visited, graph);
-		buildInterferenceGraph(visited);
+		liveness.analyzeLiveness(initialWorklist, graph);
+		buildInterferenceGraph(initialWorklist);
 		// TODO: simplify, spill
-		maximumCardinalitySearch(interferenceGraph);
+		//maximumCardinalitySearch(interferenceGraph);
+		for (Node node : interferenceGraph.adjList.keySet()) {
+			selectStack.push(node);
+		}
 		colorGraph();
 		// TODO: coalescing
 		return Map.copyOf(this.registerAllocation);
@@ -82,11 +86,11 @@ public class AsmRegisterAllocator implements RegisterAllocator{
 				scan(predecessor, visited);
 			}
 		}
-		/*
+		
 		if (needsRegister(node)) {
-			this.registers.put(node, new AsmRegister(AsmRegisterName.RBX));
+			this.initialWorklist.add(node);
 		}
-		*/
+		
 	}
 
 	private static boolean needsRegister(Node node) {
@@ -139,7 +143,7 @@ public class AsmRegisterAllocator implements RegisterAllocator{
 				}
 			}
 			if (color == -1) {
-				spilledNodes.add(node);
+				spillWorklist.add(node);
 			} else {
 				coloring.put(node, color);
 			}
@@ -165,19 +169,18 @@ public class AsmRegisterAllocator implements RegisterAllocator{
 		for (Node node: graph.nodes()) {
 			weights.put(node, 0);
 		}
-		Set<Node> nodes = graph.nodes();
+		Set<Node> unvisited = graph.nodes();
 		
 		for (int i = 0; i < n; i++) {
-			Node maxNode = findMaxWeightNode(weights);
+			Node maxNode = findMaxWeightNode(weights, unvisited);
 			eliminationOrdering.add(maxNode);
 			for (Node neighbor : graph.adjacent(maxNode)) {
-				if (nodes.contains(neighbor)) {
+				if (unvisited.contains(neighbor)) {
 					weights.compute(neighbor, (k, v) -> v + 1);
 					
 				}
 			}
-			nodes.remove(maxNode);
-			weights.remove(maxNode);
+			unvisited.remove(maxNode);
 		}
 		
 		for (Node node : eliminationOrdering.reversed()) {
@@ -191,11 +194,11 @@ public class AsmRegisterAllocator implements RegisterAllocator{
 	 * @param weights List of weights for each node
 	 * @return Node with maximum weight
 	 */
-	private Node findMaxWeightNode(Map<Node, Integer> weights) {
+	private Node findMaxWeightNode(Map<Node, Integer> weights, Set<Node> nodes) {
 		int maximum = 0;
-		Node maxNode = weights.keySet().iterator().next();
-		for (Node node : weights.keySet()) {
-			if (weights.get(node) > maximum) {
+		Node maxNode = null;
+		for (Node node : nodes) {
+			if (weights.get(node) > maximum || maxNode == null) {
 				maximum = weights.get(node);
 				maxNode = node;
 			}
@@ -235,9 +238,12 @@ public class AsmRegisterAllocator implements RegisterAllocator{
 
 	}
 
-	// TODO
 	private void spill() {
+		for (Node node : spillWorklist) {
+			spillWorklist.remove(node);
+			simplifyWorklist.add(node);
 
+		}
 	}
 
 }
