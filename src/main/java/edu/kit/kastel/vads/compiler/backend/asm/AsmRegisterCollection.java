@@ -4,7 +4,6 @@ import java.util.List;
 
 public class AsmRegisterCollection {
 	public final List<AsmRegister> REGISTERS = List.of(
-		new AsmRegister("RAX"),
 		new AsmRegister("RBX"),
 		new AsmRegister("RCX"),
 		new AsmRegister("RDX"),

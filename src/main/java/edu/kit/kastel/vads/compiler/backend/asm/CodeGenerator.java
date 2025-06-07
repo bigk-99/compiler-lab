@@ -28,6 +28,7 @@ public class CodeGenerator {
 	public String generateCode(List<IrGraph> program) {
 		StringBuilder builder = new StringBuilder();
 		for (IrGraph graph : program) {
+			System.out.println(graph);
 			AsmRegisterAllocator allocator = new AsmRegisterAllocator();
 			Map<Node, Register> registers = allocator.allocateRegisters(graph);
 			for (var entry : registers.entrySet()) {
@@ -43,14 +44,13 @@ public class CodeGenerator {
 			builder.append("main:")
 				.append("\n")
 				.append("call _main")
-				.append("\n\n");
-
+				.append("\n");
 			builder.append("movq %rax, %rdi")
 				.append("\n")
 				.append("movq $0x3C, %rax")
 				.append("\n")
 				.append("syscall")
-				.append("\n\n\n");
+				.append("\n\n");
 
 			builder.append("_main:")
 				.append("\n");
@@ -78,13 +78,35 @@ public class CodeGenerator {
 			case AddNode add -> binary(builder, registers, add, "add");
 			case SubNode sub -> binary(builder, registers, sub, "sub");
 			case MulNode mul -> binary(builder, registers, mul, "imul");
-			case DivNode div -> binary(builder, registers, div, "div");
-			case ModNode mod -> builder.repeat(" ", 2)
-				.append("")
+			//case DivNode div -> binary(builder, registers, div, "idiv");
+			case DivNode div -> {
+                Register left = registers.get(predecessorSkipProj(div, BinaryOperationNode.LEFT));
+                Register right = registers.get(predecessorSkipProj(div, BinaryOperationNode.RIGHT));
+                builder.append("  movq ").append(left).append(", %rax\n")
+                       .append("  cqto\n")
+                       .append("  idivq ").append(right).append("\n")
+                       .append("  movq %rax, ").append(registers.get(div)).append("\n");
+            }
+			case ModNode mod -> {
+			Register left = registers.get(predecessorSkipProj(mod, BinaryOperationNode.LEFT));
+			Register right = registers.get(predecessorSkipProj(mod, BinaryOperationNode.RIGHT));
+			Register dest = registers.get(mod);
+
+			builder.append("  movq ").append(left).append(", %rax\n");
+			builder.append("  cqto\n");  
+			builder.append("  idivq ").append(right).append("\n");
+			builder.append("  movq %rdx, ").append(dest); 
+			}
+			case ReturnNode r -> builder.repeat(" ", 2)
+				.append("movq")
+				.append(" ")
+				.append(registers.get(predecessorSkipProj(r, ReturnNode.RESULT)))
+				.append(", ")
+				.append("%rax")
 				.append("\n")
-				.append(0)
+				.append("  ")
+				.append("ret")
 				.append("\n");
-			case ReturnNode r -> builder.repeat(" ", 2).append("ret ");
 				//.append(registers.get(predecessorSkipProj(r, ReturnNode.RESULT)));
             case ConstIntNode c -> builder.repeat(" ", 2)
                 .append("movq")
@@ -103,7 +125,7 @@ public class CodeGenerator {
 		}
 		builder.append("\n");
 	}
-
+	
 	private static void binary(
         StringBuilder builder,
         Map<Node, Register> registers,
@@ -113,8 +135,9 @@ public class CodeGenerator {
 		builder.repeat(" ", 2)
 			.append(opcode)
 			.append(" ")
-			.append(registers.get(predecessorSkipProj(node, BinaryOperationNode.LEFT)))
+			.append(registers.get(predecessorSkipProj(node, BinaryOperationNode.RIGHT)))
 			.append(", ")
-			.append(registers.get(predecessorSkipProj(node, BinaryOperationNode.RIGHT)));
+			.append(registers.get(predecessorSkipProj(node, BinaryOperationNode.LEFT)));
     }
+			
 }
